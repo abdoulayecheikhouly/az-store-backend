@@ -1,0 +1,71 @@
+name: azstore
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: azstore
+      POSTGRES_USER: azstore
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?required}
+    volumes: [database:/var/lib/postgresql/data]
+    restart: unless-stopped
+    mem_limit: 256m
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U azstore -d azstore']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [private]
+  backend:
+    image: azstore-backend:${BACKEND_TAG:?required}
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      TZ: UTC
+      PORT: 8081
+      EXCHANGE_ENABLED: true
+      MAIL_ENABLED: ${MAIL_ENABLED:-false}
+      MAIL_FROM: ${MAIL_FROM:-}
+      SMTP_HOST: ${SMTP_HOST:-localhost}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      DATABASE_URL: jdbc:postgresql://db:5432/azstore
+      DATABASE_USER: azstore
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?required}
+      PUBLIC_ORIGIN: https://free-az.hopto.org
+      WHATSAPP_NUMBER: '212610420453'
+      UPLOADS_PATH: /data/uploads
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    volumes: [uploads:/data/uploads]
+    depends_on:
+      db: {condition: service_healthy}
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks:
+      private:
+        aliases: [azstore-backend]
+    mem_limit: 768m
+  frontend:
+    image: azstore-frontend:${FRONTEND_TAG:?required}
+    depends_on: [backend]
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks:
+      private: {}
+      proxy:
+        aliases: [azstore-frontend]
+    mem_limit: 192m
+volumes:
+  database: {}
+  uploads: {}
+networks:
+  private: {}
+  proxy:
+    external: true
+    name: samakeur_default
